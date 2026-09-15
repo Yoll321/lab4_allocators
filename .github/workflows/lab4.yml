@@ -1,0 +1,67 @@
+name: Allocators Release Build
+
+on:
+  push:
+    branches: main
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            package_extention: dmg
+          - os: ubuntu-latest
+            package_extention: deb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DPATCH_VERSION=${{ github.run_number }} \
+          -DBUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Build package
+        run: cmake --build build --target package --config Release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: allocators-${{ runner.os }}
+          path: build/*.${{ matrix.package_extention}}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          generate_release_notes: true
+          files: |
+            artifacts/allocators-Linux/*.deb
+            artifacts/allocators-macOS/*.dmg
